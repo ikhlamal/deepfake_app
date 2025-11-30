@@ -4,6 +4,9 @@ import numpy as np
 import tensorflow as tf
 import plotly.graph_objects as go
 
+# For v5 variant (mouth crop)
+import mediapipe as mp
+
 # ==== CSS custom supaya jarak dan centering lebih konsisten ====
 st.markdown("""
     <style>
@@ -158,6 +161,33 @@ FRAME_COUNT = 8
 RESIDUE_COUNT = 7
 FRAME_SHAPE = (64, 144)
 
+
+# ----- Crop mouth frame khusus untuk v5 -----
+class MouthExtractor:
+    # Outer and inner lip landmark indices for MediaPipe FaceMesh
+    MOUTH_LANDMARKS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308]
+    def __init__(self):
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5)
+
+    def crop(self, img):
+        result = self.face_mesh.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        if not result.multi_face_landmarks:
+            return cv2.resize(img, (144, 64))
+        h, w, _ = img.shape
+        pts = np.array([[int(lm.x*w), int(lm.y*h)] for lm in result.multi_face_landmarks[0].landmark])
+        try:
+            mouth_pts = pts[self.MOUTH_LANDMARKS]
+        except:
+            return cv2.resize(img, (144, 64))
+        x, y, w_m, h_m = cv2.boundingRect(mouth_pts)
+        pad_w, pad_h = int(w_m*0.2), int(h_m*0.5)
+        x1, y1 = max(0, x-pad_w), max(0, y-pad_h)
+        x2, y2 = min(w, x+w_m+pad_w), min(h, y+h_m+pad_h)
+        crop = img[y1:y2, x1:x2]
+        crop_resize = cv2.resize(crop, (144, 64))
+        return crop_resize
+
 def load_video_frames(file_bytes, frame_count=FRAME_COUNT, dim=FRAME_SHAPE):
     import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
@@ -184,8 +214,35 @@ def load_video_frames(file_bytes, frame_count=FRAME_COUNT, dim=FRAME_SHAPE):
         frames = np.concatenate([frames, padding], axis=0)
     return frames.astype(np.float32) / 255.0
 
+def load_video_frames_v5(file_bytes, frame_count=FRAME_COUNT):
+    import tempfile
+    mouth_extractor = MouthExtractor()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+        tmp_file.write(file_bytes)
+        tmp_path = tmp_file.name
+    cap = cv2.VideoCapture(tmp_path)
+    frames = []
+    try:
+        while len(frames) < frame_count:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            crop = mouth_extractor.crop(frame)
+            frames.append(crop)
+    finally:
+        cap.release()
+    import os
+    os.remove(tmp_path)
+    frames = np.array(frames)
+    if len(frames) == 0:
+        return np.zeros((frame_count, 64, 144, 3), dtype=np.float32)
+    if len(frames) < frame_count:
+        padding = np.zeros((frame_count - len(frames), 64, 144, 3), dtype=np.float32)
+        frames = np.concatenate([frames, padding], axis=0)
+    return frames.astype(np.float32) / 255.0
+
 def compute_residue(frames):
-    residues = np.zeros((RESIDUE_COUNT, FRAME_SHAPE[0], FRAME_SHAPE[1], 3), dtype=np.float32)
+    residues = np.zeros((RESIDUE_COUNT, 64, 144, 3), dtype=np.float32)
     for i in range(1, len(frames)):
         residues[i-1] = frames[i] - frames[i-1]
     return residues
@@ -196,8 +253,10 @@ def load_model_and_weights(weight_path):
     model.load_weights(weight_path)
     return model
 
+# Load all models: v2, v4, v5
 model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
 model_v4 = load_model_and_weights("best_lipinc_model.h5")
+model_v5 = load_model_and_weights("v5.h5")
 
 def gauge_chart(score, label):
     fig = go.Figure(go.Indicator(
@@ -232,26 +291,41 @@ uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded)
     file_bytes = uploaded.read()
-    frames = load_video_frames(file_bytes)
-    residues = compute_residue(frames)
-    X_frames = np.expand_dims(frames, axis=0)
-    X_residues = np.expand_dims(residues, axis=0)
-    pred_class_v2, _ = model_v2.predict([X_frames, X_residues])
+    # --- Inference V2 dan V4 (pakai pipeline lama) ---
+    frames_std = load_video_frames(file_bytes)
+    residues_std = compute_residue(frames_std)
+    X_frames_std = np.expand_dims(frames_std, axis=0)
+    X_residues_std = np.expand_dims(residues_std, axis=0)
+    pred_class_v2, _ = model_v2.predict([X_frames_std, X_residues_std])
     score_v2 = float(pred_class_v2[0][1])
     label_v2 = "FAKE" if score_v2 > 0.5 else "REAL"
-    pred_class_v4, _ = model_v4.predict([X_frames, X_residues])
+    pred_class_v4, _ = model_v4.predict([X_frames_std, X_residues_std])
     score_v4 = float(pred_class_v4[0][1])
     label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
-    col1, col2 = st.columns(2)
-    with col1:
+
+    # --- Inference V5 (mouth crop pipeline khusus) ---
+    frames_v5 = load_video_frames_v5(file_bytes)
+    residues_v5 = compute_residue(frames_v5)
+    X_frames_v5 = np.expand_dims(frames_v5, axis=0)
+    X_residues_v5 = np.expand_dims(residues_v5, axis=0)
+    pred_class_v5, _ = model_v5.predict([X_frames_v5, X_residues_v5])
+    score_v5 = float(pred_class_v5[0][1])
+    label_v5 = "FAKE" if score_v5 > 0.5 else "REAL"
+
+    # --- Layout ---
+    colv2, colv4, colv5 = st.columns(3)
+    with colv2:
         with st.container(border=True):
             st.markdown(center_text("Model V2", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
-            st.markdown(center_text(label_v2, color="red" if label_v2=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"),
-                        unsafe_allow_html=True)
-    with col2:
+            st.markdown(center_text(label_v2, color="red" if label_v2=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
+    with colv4:
         with st.container(border=True):
             st.markdown(center_text("Model V4", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
-            st.markdown(center_text(label_v4, color="red" if label_v4=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"),
-                        unsafe_allow_html=True)
+            st.markdown(center_text(label_v4, color="red" if label_v4=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
+    with colv5:
+        with st.container(border=True):
+            st.markdown(center_text("Model V5 (MouthCrop)", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
+            st.plotly_chart(gauge_chart(score_v5, label_v5), use_container_width=True)
+            st.markdown(center_text(label_v5, color="red" if label_v5=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
