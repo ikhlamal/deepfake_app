@@ -1,6 +1,3 @@
-import keras
-keras.config.enable_unsafe_deserialization()  # Fix untuk Lambda layer di file model
-
 import streamlit as st
 import numpy as np
 import cv2
@@ -9,10 +6,9 @@ import tensorflow as tf
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
-# ==== Definisi custom layer dari arsitektur kamu ====
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
-        super().__init__(**kwargs)
+        super(MultiHeadAttention, self).__init__(**kwargs)
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.d_model = num_heads * key_dim
@@ -121,7 +117,40 @@ class VisionTemporalTransformer(tf.keras.layers.Layer):
         })
         return config
 
-# ==== Fungsi preprocessing video ====
+def build_lipinc_model(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_model=128):
+    from tensorflow.keras.layers import Input, Lambda, Dense
+    from tensorflow.keras.models import Model
+
+    frame_input = Input(shape=frame_shape, name='FrameInput')
+    residue_input = Input(shape=residue_shape, name='ResidueInput')
+
+    vt = VisionTemporalTransformer(patch_size=8, d_model=d_model, num_heads=4, spatial_layers=1, temporal_layers=1)
+    frame_feat = vt(frame_input)
+    residue_feat = vt(residue_input)
+
+    expand1 = Lambda(lambda x: tf.expand_dims(x, axis=1))
+    q = expand1(frame_feat)
+    k = expand1(residue_feat)
+    v = k
+
+    mha = MultiHeadAttention(num_heads=4, key_dim=d_model//4)
+    attn_out = mha(q, value=v, key=k)
+
+    squeeze = Lambda(lambda x: tf.squeeze(x, axis=1))
+    attn_out = squeeze(attn_out)
+
+    concat = Lambda(lambda t: tf.concat(t, axis=1))
+    fusion = concat([frame_feat, residue_feat, attn_out])
+
+    x = Dense(512, activation='relu')(fusion)
+    x = Dense(256, activation='relu')(x)
+
+    class_output = Dense(2, activation='softmax', name='class_output')(x)
+    features_output = Dense(d_model, activation=None, name='features_output')(x)
+
+    model = Model(inputs=[frame_input, residue_input], outputs=[class_output, features_output], name='LIPINC_fixed')
+    return model
+
 FRAME_COUNT = 8
 RESIDUE_COUNT = 7
 FRAME_SHAPE = (64, 144)
@@ -158,25 +187,14 @@ def compute_residue(frames):
         residues[i-1] = frames[i] - frames[i-1]
     return residues
 
-# ==== Load dua model dengan cache (biar tidak lama saat upload) ====
 @st.cache_resource(show_spinner=True)
-def load_model_v2():
-    co = {
-        "VisionTemporalTransformer": VisionTemporalTransformer,
-        "MultiHeadAttention": MultiHeadAttention,
-    }
-    return tf.keras.models.load_model("lipinc_full_data_final.h5", custom_objects=co, compile=False)
+def load_model_and_weights(weight_path):
+    model = build_lipinc_model()
+    model.load_weights(weight_path)
+    return model
 
-@st.cache_resource(show_spinner=True)
-def load_model_v4():
-    co = {
-        "VisionTemporalTransformer": VisionTemporalTransformer,
-        "MultiHeadAttention": MultiHeadAttention,
-    }
-    return tf.keras.models.load_model("best_lipinc_model.h5", custom_objects=co, compile=False)
-
-model_v2 = load_model_v2()
-model_v4 = load_model_v4()
+model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
+model_v4 = load_model_and_weights("best_lipinc_model.h5")
 
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
@@ -187,18 +205,15 @@ if uploaded is not None:
     X_frames = np.expand_dims(frames, axis=0)
     X_residues = np.expand_dims(residues, axis=0)
 
-    # --- Prediksi model v2 (lipinc_full_data_final.h5) ---
     pred_class_v2, _ = model_v2.predict([X_frames, X_residues])
     label_idx_v2 = int(np.argmax(pred_class_v2[0]))
     score_v2 = float(pred_class_v2[0][label_idx_v2])
     label_str_v2 = "FAKE" if label_idx_v2 == 1 else "REAL"
 
-    # --- Prediksi model v4 (best_lipinc_model.h5) ---
     pred_class_v4, _ = model_v4.predict([X_frames, X_residues])
     label_idx_v4 = int(np.argmax(pred_class_v4[0]))
     score_v4 = float(pred_class_v4[0][label_idx_v4])
     label_str_v4 = "FAKE" if label_idx_v4 == 1 else "REAL"
 
-    # === TAMPILKAN OUTPUT ===
     st.markdown(f"**v2:** {label_str_v2} ({score_v2:.3f})")
     st.markdown(f"**v4:** {label_str_v4} ({score_v4:.3f})")
