@@ -4,6 +4,17 @@ import numpy as np
 import tensorflow as tf
 import plotly.graph_objects as go
 
+# ==== Minimize Space with Custom CSS ====
+st.markdown("""
+    <style>
+    .block-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
+    .stPlotlyChart {padding-top: 0rem !important; padding-bottom: 0rem !important; margin-top: -30px !important; margin-bottom: -30px !important;}
+    .element-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
+    h4, h5, h6 {margin-top:0px; margin-bottom:0px;}
+    .st-emotion-cache-1wmyrj9, .st-emotion-cache-1r6slb0 {padding-top: 0rem !important; padding-bottom: 0rem !important;}
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
@@ -122,34 +133,25 @@ class VisionTemporalTransformer(tf.keras.layers.Layer):
 def build_lipinc_model(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_model=128):
     from tensorflow.keras.layers import Input, Lambda, Dense
     from tensorflow.keras.models import Model
-
     frame_input = Input(shape=frame_shape, name='FrameInput')
     residue_input = Input(shape=residue_shape, name='ResidueInput')
-
     vt = VisionTemporalTransformer(patch_size=8, d_model=d_model, num_heads=4, spatial_layers=1, temporal_layers=1)
     frame_feat = vt(frame_input)
     residue_feat = vt(residue_input)
-
     expand1 = Lambda(lambda x: tf.expand_dims(x, axis=1))
     q = expand1(frame_feat)
     k = expand1(residue_feat)
     v = k
-
     mha = MultiHeadAttention(num_heads=4, key_dim=d_model//4)
     attn_out = mha(q, value=v, key=k)
-
     squeeze = Lambda(lambda x: tf.squeeze(x, axis=1))
     attn_out = squeeze(attn_out)
-
     concat = Lambda(lambda t: tf.concat(t, axis=1))
     fusion = concat([frame_feat, residue_feat, attn_out])
-
     x = Dense(512, activation='relu')(fusion)
     x = Dense(256, activation='relu')(x)
-
     class_output = Dense(2, activation='softmax', name='class_output')(x)
     features_output = Dense(d_model, activation=None, name='features_output')(x)
-
     model = Model(inputs=[frame_input, residue_input], outputs=[class_output, features_output], name='LIPINC_fixed')
     return model
 
@@ -215,8 +217,10 @@ def gauge_chart(score, label):
                 'value': score*100
             }
         },
-        number={'suffix': "%"}
+        number={'suffix': "%", 'font': {'size': 34}},
+        title={'text': ""}
     ))
+    fig.update_layout(margin=dict(t=0, b=0, l=2, r=2), height=180)
     return fig
 
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
@@ -227,24 +231,20 @@ if uploaded is not None:
     residues = compute_residue(frames)
     X_frames = np.expand_dims(frames, axis=0)
     X_residues = np.expand_dims(residues, axis=0)
-
     pred_class_v2, _ = model_v2.predict([X_frames, X_residues])
-    score_v2 = float(pred_class_v2[0][1])   # Score FAKE class
+    score_v2 = float(pred_class_v2[0][1])
     label_v2 = "FAKE" if score_v2 > 0.5 else "REAL"
-
     pred_class_v4, _ = model_v4.predict([X_frames, X_residues])
-    score_v4 = float(pred_class_v4[0][1])   # Score FAKE class
+    score_v4 = float(pred_class_v4[0][1])
     label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
-
     col1, col2 = st.columns(2)
-
     with col1:
         with st.container(border=True):
-            st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
+            st.markdown("<h5 style='text-align:center;margin-bottom:-6px;margin-top:2px;'>Model V2</h5>", unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
-            st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
+            st.markdown(f"<h6 style='text-align:center;margin-top:-15px;margin-bottom:-4px; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h6>", unsafe_allow_html=True)
     with col2:
         with st.container(border=True):
-            st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
+            st.markdown("<h5 style='text-align:center;margin-bottom:-6px;margin-top:2px;'>Model V4</h5>", unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
-            st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
+            st.markdown(f"<h6 style='text-align:center;margin-top:-15px;margin-bottom:-4px; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h6>", unsafe_allow_html=True)
