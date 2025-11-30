@@ -18,7 +18,126 @@ st.markdown("""
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
-# ==== Model arsitektur untuk custom layer ====
+FRAME_COUNT = 8
+RESIDUE_COUNT = 7
+FRAME_SHAPE = (64, 144)
+
+# ---------- v1 & v3: MHA dari Keras ----------
+def build_lipinc_model_v1v3(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_model=128):
+
+    from tensorflow.keras.layers import Input, Lambda, Dense, Layer, GlobalAveragePooling1D, LayerNormalization
+    from tensorflow.keras.models import Model
+
+    class VisionTemporalTransformer(Layer):
+        def __init__(self, patch_size=8, d_model=128, num_heads=4, spatial_layers=1, temporal_layers=1, **kwargs):
+            super(VisionTemporalTransformer, self).__init__(**kwargs)
+            self.patch_size = patch_size
+            self.d_model = d_model
+            self.num_heads = num_heads
+            self.spatial_layers = spatial_layers
+            self.temporal_layers = temporal_layers
+            self.dense_projection = Dense(d_model)
+            self.pos_emb = None
+            self.spatial_mhas = [tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=d_model//num_heads) for _ in range(spatial_layers)]
+            self.spatial_norm1 = [LayerNormalization() for _ in range(spatial_layers)]
+            self.spatial_ffn = [tf.keras.Sequential([Dense(d_model*4, activation='relu'), Dense(d_model)]) for _ in range(spatial_layers)]
+            self.spatial_norm2 = [LayerNormalization() for _ in range(spatial_layers)]
+            self.temporal_mhas = [tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=d_model//num_heads) for _ in range(temporal_layers)]
+            self.temporal_norm1 = [LayerNormalization() for _ in range(temporal_layers)]
+            self.temporal_ffn = [tf.keras.Sequential([Dense(d_model*4, activation='relu'), Dense(d_model)]) for _ in range(temporal_layers)]
+            self.temporal_norm2 = [LayerNormalization() for _ in range(temporal_layers)]
+        def build(self, input_shape):
+            _, frames, H, W, C = input_shape
+            ph = H // self.patch_size
+            pw = W // self.patch_size
+            num_patches = ph * pw
+            self.pos_emb = self.add_weight(shape=(1, num_patches, self.d_model), initializer='random_normal', trainable=True, name='pos_emb')
+            super(VisionTemporalTransformer, self).build(input_shape)
+        def call(self, inputs):
+            batch = tf.shape(inputs)[0]
+            frames = tf.shape(inputs)[1]
+            H = tf.shape(inputs)[2]
+            W = tf.shape(inputs)[3]
+            C = tf.shape(inputs)[4]
+            reshaped = tf.reshape(inputs, (-1, H, W, C))
+            patches = tf.image.extract_patches(
+                images=reshaped,
+                sizes=[1, self.patch_size, self.patch_size, 1],
+                strides=[1, self.patch_size, self.patch_size, 1],
+                rates=[1,1,1,1],
+                padding='VALID'
+            )
+            num_patches = tf.shape(patches)[1] * tf.shape(patches)[2]
+            patch_dim = tf.shape(patches)[-1]
+            patches = tf.reshape(patches, (-1, num_patches, patch_dim))
+            x = self.dense_projection(patches) + self.pos_emb
+            for i in range(self.spatial_layers):
+                attn = self.spatial_mhas[i](query=x, value=x, key=x)
+                x = self.spatial_norm1[i](x + attn)
+                ff = self.spatial_ffn[i](x)
+                x = self.spatial_norm2[i](x + ff)
+            d_model = tf.shape(x)[-1]
+            x = tf.reshape(x, (batch, frames, -1, d_model))
+            x = tf.reduce_mean(x, axis=2)
+            for i in range(self.temporal_layers):
+                attn = self.temporal_mhas[i](query=x, value=x, key=x)
+                x = self.temporal_norm1[i](x + attn)
+                ff = self.temporal_ffn[i](x)
+                x = self.temporal_norm2[i](x + ff)
+            pooled = GlobalAveragePooling1D()(x)
+            return pooled
+        def get_config(self):
+            config = super().get_config()
+            config.update({
+                "patch_size": self.patch_size,
+                "d_model": self.d_model,
+                "num_heads": self.num_heads,
+                "spatial_layers": self.spatial_layers,
+                "temporal_layers": self.temporal_layers,
+            })
+            return config
+
+    frame_input = Input(shape=frame_shape, name='FrameInput')
+    residue_input = Input(shape=residue_shape, name='ResidueInput')
+
+    vt = VisionTemporalTransformer(
+        patch_size=8,
+        d_model=d_model,
+        num_heads=4,
+        spatial_layers=1,
+        temporal_layers=1
+    )
+
+    frame_feat = vt(frame_input)
+    residue_feat = vt(residue_input)
+
+    expand1 = Lambda(lambda x: tf.expand_dims(x, axis=1))
+    q = expand1(frame_feat)
+    k = expand1(residue_feat)
+    v = k
+
+    mha = tf.keras.layers.MultiHeadAttention(num_heads=4, key_dim=d_model//4)
+    attn_out = mha(query=q, value=v, key=k)
+    squeeze = Lambda(lambda x: tf.squeeze(x, axis=1))
+    attn_out = squeeze(attn_out)
+
+    concat = Lambda(lambda t: tf.concat(t, axis=1))
+    fusion = concat([frame_feat, residue_feat, attn_out])
+
+    x = Dense(512, activation='relu')(fusion)
+    x = Dense(256, activation='relu')(x)
+
+    class_output = Dense(2, activation='softmax', name='class_output')(x)
+    features_output = Dense(d_model, activation=None, name='features_output')(x)
+
+    model = Model(
+        inputs=[frame_input, residue_input],
+        outputs=[class_output, features_output],
+        name='LIPINC_v1v3'
+    )
+    return model
+
+# ---------- v2, v4, v5: Custom MHA ----------
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
         super().__init__(**kwargs)
@@ -155,11 +274,7 @@ def build_lipinc_model(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_m
     model = Model(inputs=[frame_input, residue_input], outputs=[class_output, features_output], name='LIPINC_fixed')
     return model
 
-FRAME_COUNT = 8
-RESIDUE_COUNT = 7
-FRAME_SHAPE = (64, 144)
-
-# ----- Crop mouth frame khusus untuk v5 -----
+# ----- Crop mulut khusus v5 -----
 class MouthExtractor:
     MOUTH_LANDMARKS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308]
     def __init__(self):
@@ -244,15 +359,21 @@ def compute_residue(frames):
     return residues
 
 @st.cache_resource(show_spinner=True)
+def load_model_and_weights_v1v3(weight_path):
+    model = build_lipinc_model_v1v3()
+    model.load_weights(weight_path)
+    return model
+
+@st.cache_resource(show_spinner=True)
 def load_model_and_weights(weight_path):
     model = build_lipinc_model()
     model.load_weights(weight_path)
     return model
 
-# === Load all models ===
-model_v1 = load_model_and_weights("v1.h5")
+# ==== Load semua model ====
+model_v1 = load_model_and_weights_v1v3("v1.h5")
 model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
-model_v3 = load_model_and_weights("v3.h5")
+model_v3 = load_model_and_weights_v1v3("v3.h5")
 model_v4 = load_model_and_weights("best_lipinc_model.h5")
 model_v5 = load_model_and_weights("v5.h5")
 
@@ -289,7 +410,7 @@ uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded)
     file_bytes = uploaded.read()
-    # --- Inference v1, v2, v3, v4 (tanpa mediapipe crop, resize biasa) ---
+    # --- Inference v1, v2, v3, v4 (resize tanpa crop) ---
     frames_std = load_video_frames(file_bytes)
     residues_std = compute_residue(frames_std)
     X_frames_std = np.expand_dims(frames_std, axis=0)
@@ -311,7 +432,7 @@ if uploaded is not None:
     score_v4 = float(pred_class_v4[0][1])
     label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
 
-    # --- Inference v5 (mouth crop mediapipe) ---
+    # --- Inference v5 (mediapipe crop mouth) ---
     frames_v5 = load_video_frames_v5(file_bytes)
     residues_v5 = compute_residue(frames_v5)
     X_frames_v5 = np.expand_dims(frames_v5, axis=0)
@@ -320,7 +441,7 @@ if uploaded is not None:
     score_v5 = float(pred_class_v5[0][1])
     label_v5 = "FAKE" if score_v5 > 0.5 else "REAL"
 
-    # --- Layout: lima kolom ---
+    # ---- Layout 5 kolom ----
     colv1, colv2, colv3, colv4, colv5 = st.columns(5)
     with colv1:
         with st.container(border=True):
