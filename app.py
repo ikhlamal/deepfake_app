@@ -412,7 +412,7 @@ if uploaded is not None:
     st.video(uploaded, start_time=0)
     st.markdown("""
         <style>
-        video {max-width:320px !important; height:auto !important;}
+        video {max-width:100px !important; height:auto !important;}
         </style>
     """, unsafe_allow_html=True)
     file_bytes = uploaded.read()
