@@ -241,10 +241,10 @@ if uploaded is not None:
     with col1:
         with st.container(border=True):
             st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
-            st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=False)
+            st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
             st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
     with col2:
         with st.container(border=True):
             st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
-            st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=False)
+            st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
             st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
