@@ -1,6 +1,6 @@
-mediapipe==0.10.21
 streamlit
 numpy
 opencv-python-headless
+mediapipe
 tensorflow
 plotly
