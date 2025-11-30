@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 # ==== CSS supaya container/card dan plot tidak terlalu rapat/tidak terlalu luas ====
 st.markdown("""
     <style>
-    .block-container {padding-top: 0.5rem !important; padding-bottom: 0.5rem !important;}
+    .block-container {padding-top: 0.0rem !important; padding-bottom: 0.0rem !important;}
     .stPlotlyChart {padding-top: 0rem !important; padding-bottom: 0rem !important; margin-top: 5px !important; margin-bottom: 0px !important;}
     .element-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
     h4, h5, h6 {margin-top:8px; margin-bottom:8px;}
