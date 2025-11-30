@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 # ==== CSS custom supaya jarak dan centering lebih konsisten ====
 st.markdown("""
     <style>
-    .block-container {padding-top: 0.5rem !important; padding-bottom: 0.5rem !important;}
+    .block-container {padding-top: 2rem !important; padding-bottom: 0.5rem !important;}
     .stPlotlyChart {padding-top: 0rem !important; padding-bottom: 0rem !important; margin-top: 5px !important; margin-bottom: 0px !important;}
     .element-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
     .st-emotion-cache-1wmyrj9, .st-emotion-cache-1r6slb0 {padding-top: 0.2rem !important; padding-bottom: 0.2rem !important;}
