@@ -7,10 +7,10 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
-# ==== Model arsitektur custom layer ====
+# ==== Model arsitektur untuk custom layer ====
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
-        super(MultiHeadAttention, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.d_model = num_heads * key_dim
@@ -198,11 +198,10 @@ def load_model_and_weights(weight_path):
 model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
 model_v4 = load_model_and_weights("best_lipinc_model.h5")
 
-def gauge_chart(score, modelname):
+def gauge_chart(score, label):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score*100,
-        title={'text': f"{modelname} Confidence"},
         gauge={
             'axis': {'range': [0,100], 'tickwidth':1},
             'bar': {'color': 'red' if score > 0.5 else 'green'},
@@ -218,9 +217,7 @@ def gauge_chart(score, modelname):
         },
         number={'suffix': "%"}
     ))
-    st.plotly_chart(fig, use_container_width=True)
-    label = "FAKE" if score > 0.5 else "REAL"
-    st.markdown(f"#### {modelname}: **{label}**")
+    return fig
 
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
@@ -231,12 +228,22 @@ if uploaded is not None:
     X_frames = np.expand_dims(frames, axis=0)
     X_residues = np.expand_dims(residues, axis=0)
 
-    # --- Prediksi model v2 ---
     pred_class_v2, _ = model_v2.predict([X_frames, X_residues])
     score_v2 = float(pred_class_v2[0][1])   # Score FAKE class
-    gauge_chart(score_v2, "v2")
+    label_v2 = "FAKE" if score_v2 > 0.5 else "REAL"
 
-    # --- Prediksi model v4 ---
     pred_class_v4, _ = model_v4.predict([X_frames, X_residues])
     score_v4 = float(pred_class_v4[0][1])   # Score FAKE class
-    gauge_chart(score_v4, "v4")
+    label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
+
+    # Tabel 2 kolom style
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
+        st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
+        st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
+    with col2:
+        st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
+        st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
+        st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
