@@ -198,7 +198,7 @@ def load_model_and_weights(weight_path):
 model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
 model_v4 = load_model_and_weights("best_lipinc_model.h5")
 
-def gauge_chart(score, label):
+def gauge_chart(score):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score*100,
@@ -219,6 +219,20 @@ def gauge_chart(score, label):
     ))
     return fig
 
+# custom CSS untuk border box
+st.markdown("""
+    <style>
+    .box-model {
+      border: 2px solid #888;
+      border-radius: 12px;
+      padding: 24px 10px 18px 10px;
+      margin-bottom: 12px;
+      background: #f9f9f9;
+      box-shadow: 0 2px 8px #dddddd77;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded)
@@ -236,14 +250,17 @@ if uploaded is not None:
     score_v4 = float(pred_class_v4[0][1])   # Score FAKE class
     label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
 
-    # Tabel 2 kolom style
     col1, col2 = st.columns(2)
 
     with col1:
+        st.markdown("<div class='box-model'>", unsafe_allow_html=True)
         st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
-        st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
+        st.plotly_chart(gauge_chart(score_v2), use_container_width=True)
         st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     with col2:
+        st.markdown("<div class='box-model'>", unsafe_allow_html=True)
         st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
-        st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
+        st.plotly_chart(gauge_chart(score_v4), use_container_width=True)
         st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
