@@ -412,9 +412,28 @@ if uploaded is not None:
     st.video(uploaded, start_time=0)
     st.markdown("""
         <style>
-        video {max-width:100px !important; height:auto !important;}
+        .st-video-container {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin-top: 12px;
+            margin-bottom: 16px;
+        }
+        .st-video-container video {
+            max-width: 320px !important;
+            height: auto !important;
+            border: 3px solid #687AAB;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px #00000022;
+            background: #F4F7FF;
+            margin: 0 auto;
+            display: block;
+        }
         </style>
-    """, unsafe_allow_html=True)
+        <div class='st-video-container'>
+            <video controls src='data:video/mp4;base64,{video_data}'></video>
+        </div>
+        """.format(video_data=uploaded.getvalue().hex()), unsafe_allow_html=True)
     file_bytes = uploaded.read()
     frames_std = load_video_frames(file_bytes)
     residues_std = compute_residue(frames_std)
