@@ -326,6 +326,6 @@ if uploaded is not None:
             st.markdown(center_text(label_v4, color="red" if label_v4=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
     with colv5:
         with st.container(border=True):
-            st.markdown(center_text("Model V5 (MouthCrop)", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
+            st.markdown(center_text("Model V5", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v5, label_v5), use_container_width=True)
             st.markdown(center_text(label_v5, color="red" if label_v5=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
