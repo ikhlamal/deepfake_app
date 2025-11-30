@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import cv2
 import tensorflow as tf
+import keras
+keras.config.enable_unsafe_deserialization()
 
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
