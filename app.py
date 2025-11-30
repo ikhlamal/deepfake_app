@@ -5,13 +5,29 @@ import tensorflow as tf
 import plotly.graph_objects as go
 import mediapipe as mp
 
-# ==== CSS custom supaya jarak dan centering lebih konsisten ====
+# ==== CSS custom jarak, centering, dan border video ====
 st.markdown("""
     <style>
     .block-container {padding-top: 2rem !important; padding-bottom: 0.5rem !important;}
     .stPlotlyChart {padding-top: 0rem !important; padding-bottom: 0rem !important; margin-top: 5px !important; margin-bottom: 0px !important;}
     .element-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
     .st-emotion-cache-1wmyrj9, .st-emotion-cache-1r6slb0 {padding-top: 0.2rem !important; padding-bottom: 0.2rem !important;}
+    /* Video centering + border */
+    .element-container:has(video) {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    video {
+        border: 3px solid #888;
+        border-radius: 14px;
+        box-shadow:0 2px 8px 0 #8884;
+        background: #fff;
+        margin: 12px auto 18px auto;
+        display:block;
+        max-width: 320px !important;
+        height: auto !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -410,30 +426,6 @@ def center_text(text, color="inherit", font_size="19px", weight="600", margin="1
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded, start_time=0)
-    st.markdown("""
-        <style>
-        .st-video-container {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            margin-top: 12px;
-            margin-bottom: 16px;
-        }
-        .st-video-container video {
-            max-width: 320px !important;
-            height: auto !important;
-            border: 3px solid #687AAB;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px #00000022;
-            background: #F4F7FF;
-            margin: 0 auto;
-            display: block;
-        }
-        </style>
-        <div class='st-video-container'>
-            <video controls src='data:video/mp4;base64,{video_data}'></video>
-        </div>
-        """.format(video_data=uploaded.getvalue().hex()), unsafe_allow_html=True)
     file_bytes = uploaded.read()
     frames_std = load_video_frames(file_bytes)
     residues_std = compute_residue(frames_std)
@@ -471,7 +463,7 @@ if uploaded is not None:
     with colv1:
         with st.container(border=True):
             st.markdown(center_text("Model V1", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
-            st.plotly_chart(gauge_chart(score_v1, label_v1), use_container_width=True, key="plot_v1") 
+            st.plotly_chart(gauge_chart(score_v1, label_v1), use_container_width=True, key="plot_v1")
             st.markdown(center_text(label_v1, color="red" if label_v1=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"), unsafe_allow_html=True)
     with colv2:
         with st.container(border=True):
