@@ -219,21 +219,6 @@ def gauge_chart(score, label):
     ))
     return fig
 
-# --- CSS border tambahan ---
-st.markdown("""
-    <style>
-    .custom-cell {
-        border: 2px solid #444;
-        border-radius: 10px;
-        padding: 18px;
-        background-color: #fcfcfc;
-        margin-bottom: 8px;
-        margin-top: 8px;
-        min-height: 400px
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded)
@@ -252,15 +237,14 @@ if uploaded is not None:
     label_v4 = "FAKE" if score_v4 > 0.5 else "REAL"
 
     col1, col2 = st.columns(2)
+
     with col1:
-        st.markdown("<div class='custom-cell'>", unsafe_allow_html=True)
-        st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
-        st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
-        st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("<h4 style='text-align:center;'>Model V2</h4>", unsafe_allow_html=True)
+            st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
+            st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h5>", unsafe_allow_html=True)
     with col2:
-        st.markdown("<div class='custom-cell'>", unsafe_allow_html=True)
-        st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
-        st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
-        st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("<h4 style='text-align:center;'>Model V4</h4>", unsafe_allow_html=True)
+            st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
+            st.markdown(f"<h5 style='text-align:center; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h5>", unsafe_allow_html=True)
