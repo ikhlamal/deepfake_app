@@ -4,13 +4,12 @@ import numpy as np
 import tensorflow as tf
 import plotly.graph_objects as go
 
-# ==== CSS supaya container/card dan plot tidak terlalu rapat/tidak terlalu luas ====
+# ==== CSS custom supaya jarak dan centering lebih konsisten ====
 st.markdown("""
     <style>
-    .block-container {padding-top: 0.0rem !important; padding-bottom: 0.0rem !important;}
+    .block-container {padding-top: 0.5rem !important; padding-bottom: 0.5rem !important;}
     .stPlotlyChart {padding-top: 0rem !important; padding-bottom: 0rem !important; margin-top: 5px !important; margin-bottom: 0px !important;}
     .element-container {padding-top: 0rem !important; padding-bottom: 0rem !important;}
-    h4, h5, h6 {margin-top:8px; margin-bottom:8px;}
     .st-emotion-cache-1wmyrj9, .st-emotion-cache-1r6slb0 {padding-top: 0.2rem !important; padding-bottom: 0.2rem !important;}
     </style>
 """, unsafe_allow_html=True)
@@ -18,6 +17,7 @@ st.markdown("""
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
+# ==== Model arsitektur untuk custom layer ====
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
         super().__init__(**kwargs)
@@ -219,8 +219,14 @@ def gauge_chart(score, label):
         number={'suffix': "%", 'font': {'size': 33}},
         title={'text': ""}
     ))
-    fig.update_layout(margin=dict(t=8, b=8, l=8, r=8), height=210)
+    fig.update_layout(margin=dict(t=12, b=12, l=8, r=8), height=210)
     return fig
+
+def center_text(text, color="inherit", font_size="19px", weight="600", margin="12px 0 8px 0"):
+    return f"""
+    <div style='width:100%;display:flex;justify-content:center;align-items:center; margin:{margin};'>
+      <span style='color:{color};font-size:{font_size};font-weight:{weight};'>{text}</span>
+    </div>"""
 
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
@@ -239,11 +245,13 @@ if uploaded is not None:
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
-            st.markdown("<h5 style='text-align:center;margin-bottom:8px;margin-top:10px;'>Model V2</h5>", unsafe_allow_html=True)
+            st.markdown(center_text("Model V2", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v2, label_v2), use_container_width=True)
-            st.markdown(f"<h6 style='text-align:center;margin-top:10px; color: {'red' if label_v2=='FAKE' else 'green'};'>{label_v2}</h6>", unsafe_allow_html=True)
+            st.markdown(center_text(label_v2, color="red" if label_v2=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"),
+                        unsafe_allow_html=True)
     with col2:
         with st.container(border=True):
-            st.markdown("<h5 style='text-align:center;margin-bottom:8px;margin-top:10px;'>Model V4</h5>", unsafe_allow_html=True)
+            st.markdown(center_text("Model V4", font_size="20px", weight="700", margin="10px 0 0px 0"), unsafe_allow_html=True)
             st.plotly_chart(gauge_chart(score_v4, label_v4), use_container_width=True)
-            st.markdown(f"<h6 style='text-align:center;margin-top:10px; color: {'red' if label_v4=='FAKE' else 'green'};'>{label_v4}</h6>", unsafe_allow_html=True)
+            st.markdown(center_text(label_v4, color="red" if label_v4=="FAKE" else "green", font_size="18px", weight="700", margin="10px 0 12px 0"),
+                        unsafe_allow_html=True)
