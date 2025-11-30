@@ -409,7 +409,12 @@ def center_text(text, color="inherit", font_size="19px", weight="600", margin="1
 
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
-    st.video(uploaded)
+    st.video(uploaded, start_time=0)
+    st.markdown("""
+        <style>
+        video {max-width:320px !important; height:auto !important;}
+        </style>
+    """, unsafe_allow_html=True)
     file_bytes = uploaded.read()
     frames_std = load_video_frames(file_bytes)
     residues_std = compute_residue(frames_std)
