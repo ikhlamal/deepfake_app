@@ -1,14 +1,15 @@
+import keras
+keras.config.enable_unsafe_deserialization()  # Fix untuk Lambda layer di file model
+
 import streamlit as st
 import numpy as np
 import cv2
 import tensorflow as tf
-import keras
-keras.config.enable_unsafe_deserialization()
 
 st.set_page_config(page_title="LipSync Fake Detector", layout="centered")
 st.title("LipSync Fake/Real Video Detection")
 
-# ======== Definisi Custom Layer ========
+# ==== Definisi custom layer dari arsitektur kamu ====
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
         super().__init__(**kwargs)
@@ -120,10 +121,11 @@ class VisionTemporalTransformer(tf.keras.layers.Layer):
         })
         return config
 
-# ====== Fungsi prepro video (frame & residue) ======
+# ==== Fungsi preprocessing video ====
 FRAME_COUNT = 8
 RESIDUE_COUNT = 7
 FRAME_SHAPE = (64, 144)
+
 def load_video_frames(file_bytes, frame_count=FRAME_COUNT, dim=FRAME_SHAPE):
     import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
@@ -156,15 +158,14 @@ def compute_residue(frames):
         residues[i-1] = frames[i] - frames[i-1]
     return residues
 
-# ======= Load kedua model =======
+# ==== Load dua model dengan cache (biar tidak lama saat upload) ====
 @st.cache_resource(show_spinner=True)
 def load_model_v2():
     co = {
         "VisionTemporalTransformer": VisionTemporalTransformer,
         "MultiHeadAttention": MultiHeadAttention,
     }
-    model = tf.keras.models.load_model("lipinc_full_data_final.h5", custom_objects=co, compile=False)
-    return model
+    return tf.keras.models.load_model("lipinc_full_data_final.h5", custom_objects=co, compile=False)
 
 @st.cache_resource(show_spinner=True)
 def load_model_v4():
@@ -172,13 +173,11 @@ def load_model_v4():
         "VisionTemporalTransformer": VisionTemporalTransformer,
         "MultiHeadAttention": MultiHeadAttention,
     }
-    model = tf.keras.models.load_model("best_lipinc_model.h5", custom_objects=co, compile=False)
-    return model
+    return tf.keras.models.load_model("best_lipinc_model.h5", custom_objects=co, compile=False)
 
 model_v2 = load_model_v2()
 model_v4 = load_model_v4()
 
-# ======= Upload video ======
 uploaded = st.file_uploader("Upload video mp4", type=["mp4"])
 if uploaded is not None:
     st.video(uploaded)
@@ -187,18 +186,19 @@ if uploaded is not None:
     residues = compute_residue(frames)
     X_frames = np.expand_dims(frames, axis=0)
     X_residues = np.expand_dims(residues, axis=0)
-    # --- INFERENSI V2 ---
+
+    # --- Prediksi model v2 (lipinc_full_data_final.h5) ---
     pred_class_v2, _ = model_v2.predict([X_frames, X_residues])
     label_idx_v2 = int(np.argmax(pred_class_v2[0]))
     score_v2 = float(pred_class_v2[0][label_idx_v2])
     label_str_v2 = "FAKE" if label_idx_v2 == 1 else "REAL"
 
-    # --- INFERENSI V4 ---
+    # --- Prediksi model v4 (best_lipinc_model.h5) ---
     pred_class_v4, _ = model_v4.predict([X_frames, X_residues])
     label_idx_v4 = int(np.argmax(pred_class_v4[0]))
     score_v4 = float(pred_class_v4[0][label_idx_v4])
     label_str_v4 = "FAKE" if label_idx_v4 == 1 else "REAL"
 
-    # === Output ===
+    # === TAMPILKAN OUTPUT ===
     st.markdown(f"**v2:** {label_str_v2} ({score_v2:.3f})")
     st.markdown(f"**v4:** {label_str_v4} ({score_v4:.3f})")
