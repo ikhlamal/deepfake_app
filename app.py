@@ -31,8 +31,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="LipSync Fake Detector", layout="wide")
-st.title("LipSync Fake/Real Video Detection")
+st.set_page_config(page_title="LipSync Deepfake Video Detection", layout="wide")
+st.title("LipSync Deepfake Video Detection")
 
 FRAME_COUNT = 8
 RESIDUE_COUNT = 7
