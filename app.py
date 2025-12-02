@@ -39,9 +39,9 @@ RESIDUE_COUNT = 7
 FRAME_SHAPE = (64, 144)
 
 # -------------------------
-# v1 & v3: MHA Keras default
+# v1
 # -------------------------
-def build_lipinc_model_v1v3(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_model=128):
+def build_lipinc_model_v1(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3), d_model=128):
 
     from tensorflow.keras.layers import Input, Lambda, Dense, Layer, GlobalAveragePooling1D, LayerNormalization
     from tensorflow.keras.models import Model
@@ -151,11 +151,11 @@ def build_lipinc_model_v1v3(frame_shape=(8,64,144,3), residue_shape=(7,64,144,3)
     model = Model(
         inputs=[frame_input, residue_input],
         outputs=[class_output, features_output],
-        name='LIPINC_v1v3'
+        name='LIPINC_v1'
     )
     return model
 
-# ---------- v2, v4, v5: Custom MHA ----------
+# ---------- v2, v3, v4, v5: Custom MHA ----------
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, num_heads, key_dim, **kwargs):
         super().__init__(**kwargs)
@@ -377,8 +377,8 @@ def compute_residue(frames):
     return residues
 
 @st.cache_resource(show_spinner=True)
-def load_model_and_weights_v1v3(weight_path):
-    model = build_lipinc_model_v1v3()
+def load_model_and_weights_v1(weight_path):
+    model = build_lipinc_model_v1()
     model.load_weights(weight_path)
     return model
 
@@ -388,9 +388,9 @@ def load_model_and_weights(weight_path):
     model.load_weights(weight_path)
     return model
 
-model_v1 = load_model_and_weights_v1v3("v1.h5")
+model_v1 = load_model_and_weights_v1("v1.h5")
 model_v2 = load_model_and_weights("v2.h5")
-model_v3 = load_model_and_weights_v1v3("v3.h5")
+model_v3 = load_model_and_weights("v3.h5")
 model_v4 = load_model_and_weights("v4.h5")
 model_v5 = load_model_and_weights("v5.h5")
 
