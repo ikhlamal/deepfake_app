@@ -389,9 +389,9 @@ def load_model_and_weights(weight_path):
     return model
 
 model_v1 = load_model_and_weights_v1v3("v1.h5")
-model_v2 = load_model_and_weights("lipinc_full_data_final.h5")
+model_v2 = load_model_and_weights("v2.h5")
 model_v3 = load_model_and_weights_v1v3("v3.h5")
-model_v4 = load_model_and_weights("best_lipinc_model.h5")
+model_v4 = load_model_and_weights("v4.h5")
 model_v5 = load_model_and_weights("v5.h5")
 
 def gauge_chart(score, label):
